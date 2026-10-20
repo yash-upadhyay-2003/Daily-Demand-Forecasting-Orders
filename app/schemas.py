@@ -1,0 +1,134 @@
+"""
+Request and response schemas for the Daily Demand Forecasting API.
+"""
+
+from typing import Dict, Any
+from pydantic import BaseModel, Field
+
+
+# ---------------------------------------------------------------------------
+# Request Schemas
+# ---------------------------------------------------------------------------
+
+class OrderPredictionRequest(BaseModel):
+    """
+    Input features expected by the trained daily demand regression model.
+    Field aliases match the exact feature names used in the training pipeline.
+    """
+
+    # Categorical features
+    week_of_month: int = Field(
+        ...,
+        alias="Week of the month (first week, second, third, fourth or fifth week",
+        description="Week number in the month (valid range: 1 to 5)",
+        ge=1,
+        le=5,
+    )
+    day_of_week: int = Field(
+        ...,
+        alias="Day of the week (Monday to Friday)",
+        description="Day encoded as integer: Monday=2, Tuesday=3, Wednesday=4, Thursday=5, Friday=6",
+        ge=2,
+        le=6,
+    )
+
+    # Numerical features
+    non_urgent_order: float = Field(
+        ...,
+        alias="Non-urgent order",
+        description="Non-urgent order quantity metric",
+        ge=0.0,
+    )
+    urgent_order: float = Field(
+        ...,
+        alias="Urgent order",
+        description="Urgent order quantity metric",
+        ge=0.0,
+    )
+    fiscal_sector_orders: float = Field(
+        ...,
+        alias="Fiscal sector orders",
+        description="Order volume from fiscal sector",
+        ge=0.0,
+    )
+    traffic_controller_orders: float = Field(
+        ...,
+        alias="Orders from the traffic controller sector",
+        description="Order volume from traffic controller sector",
+        ge=0.0,
+    )
+    banking_orders_1: float = Field(
+        ...,
+        alias="Banking orders (1)",
+        description="Order volume from banking sector 1",
+        ge=0.0,
+    )
+    banking_orders_2: float = Field(
+        ...,
+        alias="Banking orders (2)",
+        description="Order volume from banking sector 2",
+        ge=0.0,
+    )
+    banking_orders_3: float = Field(
+        ...,
+        alias="Banking orders (3)",
+        description="Order volume from banking sector 3",
+        ge=0.0,
+    )
+
+    model_config = {
+        # Allows creating instances using either the field name or the alias
+        "populate_by_name": True,
+        "json_schema_extra": {
+            "example": {
+                "Week of the month (first week, second, third, fourth or fifth week": 1,
+                "Day of the week (Monday to Friday)": 4,
+                "Non-urgent order": 316.307,
+                "Urgent order": 223.27,
+                "Fiscal sector orders": 0.0,
+                "Orders from the traffic controller sector": 65556,
+                "Banking orders (1)": 44914,
+                "Banking orders (2)": 188411,
+                "Banking orders (3)": 14793,
+            }
+        },
+    }
+
+    def to_model_input_dict(self) -> Dict[str, Any]:
+        """
+        Converts the request payload into a dictionary keyed by the exact feature
+        names expected by the scikit-learn preprocessing ColumnTransformer.
+        """
+        return {
+            "Week of the month (first week, second, third, fourth or fifth week": self.week_of_month,
+            "Day of the week (Monday to Friday)": self.day_of_week,
+            "Non-urgent order": self.non_urgent_order,
+            "Urgent order": self.urgent_order,
+            "Fiscal sector orders": self.fiscal_sector_orders,
+            "Orders from the traffic controller sector": self.traffic_controller_orders,
+            "Banking orders (1)": self.banking_orders_1,
+            "Banking orders (2)": self.banking_orders_2,
+            "Banking orders (3)": self.banking_orders_3,
+        }
+
+
+# ---------------------------------------------------------------------------
+# Response Schemas
+# ---------------------------------------------------------------------------
+
+class PredictionResponse(BaseModel):
+    """Prediction output containing the estimated total orders."""
+    predicted_total_orders: float = Field(
+        ...,
+        description="Predicted total number of orders (target variable)"
+    )
+    status: str = Field(
+        default="success",
+        description="Status flag indicating successful prediction"
+    )
+
+
+class HealthResponse(BaseModel):
+    """Health check response confirming application and model readiness."""
+    status: str = Field(..., description="Application health status")
+    model_loaded: bool = Field(..., description="True if the ML model is ready for predictions")
