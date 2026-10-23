@@ -150,19 +150,50 @@ Generates a forecast of total daily orders using operational indicators.
   "Orders from the traffic controller sector": 65556,
   "Banking orders (1)": 44914,
   "Banking orders (2)": 188411,
-  "Banking orders (3)": 14793
+  "Banking orders (3)": 14793,
+  "include_step_3": true
 }
 ```
 
 #### Example Response (`200 OK`):
 ```json
 {
-  "predicted_total_orders": 536.5034,
-  "status": "success"
+  "forecast_step_1": 271.1402,
+  "forecast_step_2": 263.9835,
+  "forecast_step_3": 315.9324,
+  "predicted_total_orders": 271.1402,
+  "status": "success",
+  "observation_horizon": "Next observation steps (t+1, t+2, t+3)"
 }
 ```
 
-#### Error Handling:
-- **`422 Unprocessable Entity`**: Returned when required fields are missing or feature values violate constraints (e.g., negative values, invalid week/day numbers).
-- **`503 Service Unavailable`**: Returned if the model is not ready or failed to load.
-- **`500 Internal Server Error`**: Returned if unexpected processing errors occur during model prediction, preventing raw internal stack traces from leaking to clients.
+---
+
+### 4. `POST /forecast`
+Dedicated future multi-step forecasting endpoint returning Next Step 1 ($t+1$), Next Step 2 ($t+2$), and optional Next Step 3 ($t+3$). Takes the same payload as `/predict`.
+
+---
+
+## 7. Model Retraining and Multi-Step Formulation
+
+- **Why Retraining Was Necessary:** The legacy pipeline (`demand_regression_modelAA.joblib`) was trained for same-day prediction ($X_t \to y_t$) where same-day urgent and non-urgent orders directly approximate the target. Future operational metrics $X_{t+1}, X_{t+2}$ are unavailable at time $t$. Simply relabeling same-day predictions would be methodologically invalid.
+- **Multi-Step Pipeline:** The script `train_future_forecast_model.py` fits a multi-output pipeline on sequential observation steps ($y_{t+1}, y_{t+2}, y_{t+3}$) without leaking `Order type A/B/C`, saving the artifact to `demand_forecast_multistep_model.joblib`.
+- **Legacy Preservation:** The original artifact `demand_regression_modelAA.joblib` remains untouched.
+
+---
+
+## 8. Safe Deployment Update Guide (Render)
+
+1. **Review and Test Locally:**
+   ```powershell
+   pytest tests/
+   python -m uvicorn app.main:app --reload
+   streamlit run streamlit_app.py
+   ```
+2. **Commit Feature Branch:**
+   Commit the changes on the `feature/future-forecasting` branch.
+3. **Merge Pull Request / Branch:**
+   When reviewed and approved, merge `feature/future-forecasting` into `main`.
+4. **Render Automatic Build:**
+   Render will detect the commit to `main`, install dependencies from `requirements.txt`, and start `uvicorn app.main:app`. The new model artifact `demand_forecast_multistep_model.joblib` will be loaded on startup.
+

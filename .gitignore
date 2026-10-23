@@ -49,5 +49,7 @@ venv.bak/
 .DS_Store
 Thumbs.db
 
-# Ensure the trained model artifact is tracked
+# Ensure trained model artifacts are tracked
 !demand_regression_modelAA.joblib
+!demand_forecast_multistep_model.joblib
+

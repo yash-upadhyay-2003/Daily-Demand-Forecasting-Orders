@@ -1,8 +1,9 @@
 """
 Request and response schemas for the Daily Demand Forecasting API.
+Supports multi-step future forecasting for Next Step 1, Next Step 2, and optional Next Step 3.
 """
 
-from typing import Dict, Any
+from typing import Any, Dict, Optional
 from pydantic import BaseModel, Field
 
 
@@ -12,8 +13,8 @@ from pydantic import BaseModel, Field
 
 class OrderPredictionRequest(BaseModel):
     """
-    Input features expected by the trained daily demand regression model.
-    Field aliases match the exact feature names used in the training pipeline.
+    Input features expected by the daily demand forecasting pipeline.
+    Field aliases match the exact feature names used in the model pipeline.
     """
 
     # Categorical features
@@ -76,6 +77,18 @@ class OrderPredictionRequest(BaseModel):
         ge=0.0,
     )
 
+    # Optional forecasting configurations
+    include_step_3: bool = Field(
+        default=True,
+        description="Whether to include optional Next Step 3 forecast in the response",
+    )
+    current_total_orders: Optional[float] = Field(
+        default=None,
+        alias="Current observation total orders",
+        description="Optional current observation total orders for historical tracking",
+        ge=0.0,
+    )
+
     model_config = {
         # Allows creating instances using either the field name or the alias
         "populate_by_name": True,
@@ -90,6 +103,7 @@ class OrderPredictionRequest(BaseModel):
                 "Banking orders (1)": 44914,
                 "Banking orders (2)": 188411,
                 "Banking orders (3)": 14793,
+                "include_step_3": True,
             }
         },
     }
@@ -112,23 +126,55 @@ class OrderPredictionRequest(BaseModel):
         }
 
 
+# Alias for explicit naming
+OrderForecastRequest = OrderPredictionRequest
+
+
 # ---------------------------------------------------------------------------
 # Response Schemas
 # ---------------------------------------------------------------------------
 
-class PredictionResponse(BaseModel):
-    """Prediction output containing the estimated total orders."""
+class ForecastResponse(BaseModel):
+    """
+    Prediction output containing forecasts for future observation steps:
+    Next Step 1 (t+1), Next Step 2 (t+2), and optional Next Step 3 (t+3).
+    """
+
+    forecast_step_1: float = Field(
+        ...,
+        description="Forecasted total orders for Next Step 1 (observation step t+1)",
+    )
+    forecast_step_2: float = Field(
+        ...,
+        description="Forecasted total orders for Next Step 2 (observation step t+2)",
+    )
+    forecast_step_3: Optional[float] = Field(
+        default=None,
+        description="Optional forecasted total orders for Next Step 3 (observation step t+3)",
+    )
     predicted_total_orders: float = Field(
         ...,
-        description="Predicted total number of orders (target variable)"
+        description="Backward-compatible alias returning the Next Step 1 forecast",
     )
     status: str = Field(
         default="success",
-        description="Status flag indicating successful prediction"
+        description="Status flag indicating successful forecast",
     )
+    observation_horizon: str = Field(
+        default="Next observation steps (t+1, t+2, t+3)",
+        description="Horizon description confirming sequential observation steps (no invented calendar dates)",
+    )
+
+
+# Backward-compatible alias
+PredictionResponse = ForecastResponse
 
 
 class HealthResponse(BaseModel):
     """Health check response confirming application and model readiness."""
     status: str = Field(..., description="Application health status")
-    model_loaded: bool = Field(..., description="True if the ML model is ready for predictions")
+    model_loaded: bool = Field(..., description="True if an ML model is ready for predictions")
+    forecast_model_ready: bool = Field(
+        default=True,
+        description="True if the multi-step future forecasting pipeline is loaded",
+    )
